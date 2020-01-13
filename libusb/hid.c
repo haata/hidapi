@@ -656,6 +656,9 @@ struct hid_device_info  HID_API_EXPORT *hid_enumerate(unsigned short vendor_id, 
 }
 #endif /* INVASIVE_GET_USAGE */
 
+								/* Interface Name */
+								cur_dev->interface_name = get_usb_string(handle, intf_desc->iInterface);
+
 								libusb_close(handle);
 							}
 							/* VID/PID */
@@ -667,6 +670,18 @@ struct hid_device_info  HID_API_EXPORT *hid_enumerate(unsigned short vendor_id, 
 
 							/* Interface Number */
 							cur_dev->interface_number = interface_num;
+
+							/* Interface Class */
+							cur_dev->interface_class = intf_desc->bInterfaceClass;
+
+							/* Interface SubClass */
+							cur_dev->interface_subclass = intf_desc->bInterfaceSubClass;
+
+							/* Interface Protocol */
+							cur_dev->interface_protocol = intf_desc->bInterfaceProtocol;
+
+							/* Number of Endpoints */
+							cur_dev->endpoints = intf_desc->bNumEndpoints;
 						}
 					}
 				} /* altsettings */
