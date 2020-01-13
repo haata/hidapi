@@ -466,11 +466,27 @@ static struct hid_device_info *create_device_info_with_usage(IOHIDDeviceRef dev,
 	 * IOKit always seems to return 0 when querying a standard USB device
 	 * for its interface. */
 	bool is_usb_hid = get_int_property(dev, CFSTR(kUSBInterfaceClass)) == kUSBHIDClass;
+
+	/* Currently not available from kIOHID on macOS */
+	cur_dev->interface_name = wcsdup(L"");
+
 	if (is_usb_hid) {
 		/* Get the interface number */
 		cur_dev->interface_number = get_int_property(dev, CFSTR(kUSBInterfaceNumber));
+		/* Get bInterfaceClass */
+		cur_dev->interface_class = get_int_property(dev, CFSTR(kUSBInterfaceClass));
+		/* Get bInterfaceSubClass */
+		cur_dev->interface_subclass = get_int_property(dev, CFSTR(kUSBInterfaceSubClass));
+		/* Get bInterfaceProtocol */
+		cur_dev->interface_protocol = get_int_property(dev, CFSTR(kUSBInterfaceProtocol));
+		/* Get bNumEndpoints */
+		cur_dev->endpoints = get_int_property(dev, CFSTR(kUSBNumEndpoints));
 	} else {
 		cur_dev->interface_number = -1;
+		cur_dev->interface_class = -1;
+		cur_dev->interface_subclass = -1;
+		cur_dev->interface_protocol = -1;
+		cur_dev->endpoints = -1;
 	}
 
 	return cur_dev;

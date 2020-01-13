@@ -7,7 +7,7 @@
  8/22/2009
 
  Copyright 2009
- 
+
  This contents of this file may be used by anyone
  for any reason without any conditions and may be
  used as a starting point for your own applications
@@ -42,20 +42,26 @@ int main(int argc, char* argv[])
 #endif
 
 	struct hid_device_info *devs, *cur_dev;
-	
+
 	if (hid_init())
 		return -1;
 
 	devs = hid_enumerate(0x0, 0x0);
-	cur_dev = devs;	
+	cur_dev = devs;
 	while (cur_dev) {
-		printf("Device Found\n  type: %04hx %04hx\n  path: %s\n  serial_number: %ls", cur_dev->vendor_id, cur_dev->product_id, cur_dev->path, cur_dev->serial_number);
-		printf("\n");
-		printf("  Manufacturer: %ls\n", cur_dev->manufacturer_string);
-		printf("  Product:      %ls\n", cur_dev->product_string);
-		printf("  Release:      %hx\n", cur_dev->release_number);
-		printf("  Interface:    %d\n",  cur_dev->interface_number);
-		printf("  Usage (page): 0x%hx (0x%hx)\n", cur_dev->usage, cur_dev->usage_page);
+		printf("Device Found\n");
+		printf("  Type:               %04hx %04hx\n", cur_dev->vendor_id, cur_dev->product_id);
+		printf("  Path:               %s\n", cur_dev->path);
+		printf("  Serial:             %ls\n", cur_dev->serial_number);
+		printf("  Manufacturer:       %ls\n", cur_dev->manufacturer_string);
+		printf("  Product:            %ls\n", cur_dev->product_string);
+		printf("  Release:            %hx\n", cur_dev->release_number);
+		printf("  Interface (num):    %ls (%d)\n", cur_dev->interface_name, cur_dev->interface_number);
+		printf("  Interface Class:    %hx\n", cur_dev->interface_class);
+		printf("  Interface SubClass: %hx\n", cur_dev->interface_subclass);
+		printf("  Interface Protocol: %hx\n", cur_dev->interface_protocol);
+		printf("  Endpoints:          %hx\n", cur_dev->endpoints);
+		printf("  Usage (page):       0x%hx (0x%hx)\n", cur_dev->usage, cur_dev->usage_page);
 		printf("\n");
 		cur_dev = cur_dev->next;
 	}
@@ -65,7 +71,7 @@ int main(int argc, char* argv[])
 	memset(buf,0x00,sizeof(buf));
 	buf[0] = 0x01;
 	buf[1] = 0x81;
-	
+
 
 	// Open the device using the VID, PID,
 	// and optionally the Serial number.
@@ -107,7 +113,7 @@ int main(int argc, char* argv[])
 
 	// Set the hid_read() function to be non-blocking.
 	hid_set_nonblocking(handle, 1);
-	
+
 	// Try to read from the device. There should be no
 	// data here, but execution should not block.
 	res = hid_read(handle, buf, 17);
@@ -150,7 +156,7 @@ int main(int argc, char* argv[])
 		printf("Unable to write()\n");
 		printf("Error: %ls\n", hid_error(handle));
 	}
-	
+
 
 	// Request state (cmd 0x81). The first byte is the report number (0x1).
 	buf[0] = 0x1;

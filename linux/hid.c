@@ -117,6 +117,20 @@ static void register_global_error(const char *msg)
 	last_global_error_str = utf8_to_wchar_t(msg);
 }
 
+/* See register_global_error, but you can pass a format string into this function. */
+static void register_global_error_format(const char *format, ...)
+{
+	va_list args;
+	va_start(args, format);
+
+	char msg[100];
+	vsnprintf(msg, sizeof(msg), format, args);
+
+	va_end(args);
+
+	register_global_error(msg);
+}
+
 
 /* Set the last error for a device to be reported by hid_error(device).
  * The given error message will be copied (and decoded according to the
@@ -503,6 +517,21 @@ struct hid_device_info  HID_API_EXPORT *hid_enumerate(unsigned short vendor_id, 
 			/* Interface Number */
 			cur_dev->interface_number = -1;
 
+			/* Interface Class */
+			cur_dev->interface_class = -1;
+
+			/* Interface SubClass */
+			cur_dev->interface_subclass = -1;
+
+			/* Interface Protocol */
+			cur_dev->interface_protocol = -1;
+
+			/* Interface Name */
+			cur_dev->interface_name = wcsdup(L"");
+
+			/* Number of Endpoints */
+			cur_dev->endpoints = -1;
+
 			switch (bus_type) {
 				case BUS_USB:
 					/* The device pointed to by raw_dev contains information about
@@ -550,6 +579,25 @@ struct hid_device_info  HID_API_EXPORT *hid_enumerate(unsigned short vendor_id, 
 					if (intf_dev) {
 						str = udev_device_get_sysattr_value(intf_dev, "bInterfaceNumber");
 						cur_dev->interface_number = (str)? strtol(str, NULL, 16): -1;
+
+						/* Interface class */
+						str = udev_device_get_sysattr_value(intf_dev, "bInterfaceClass");
+						cur_dev->interface_class = (str)? strtol(str, NULL, 16): -1;
+
+						/* Interface subclass */
+						str = udev_device_get_sysattr_value(intf_dev, "bInterfaceSubClass");
+						cur_dev->interface_subclass = (str)? strtol(str, NULL, 16): -1;
+
+						/* Interface protocol */
+						str = udev_device_get_sysattr_value(intf_dev, "bInterfaceProtocol");
+						cur_dev->interface_protocol = (str)? strtol(str, NULL, 16): -1;
+
+						/* Number of endpoints */
+						str = udev_device_get_sysattr_value(intf_dev, "bNumEndpoints");
+						cur_dev->endpoints = (str)? strtol(str, NULL, 16): -1;
+
+						/* Interface name */
+						cur_dev->interface_name = copy_udev_string(intf_dev, "interface");
 					}
 
 					break;

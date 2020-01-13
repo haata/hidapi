@@ -77,6 +77,17 @@ extern "C" {
 				* Valid on the Mac implementation if and only if the device
 				  is a USB HID device. */
 			int interface_number;
+			/** Interface Class */
+			unsigned short interface_class;
+			/** Interface SubClass */
+			unsigned short interface_subclass;
+			/** Interface Protocol */
+			unsigned short interface_protocol;
+			/** Interface Name (iInterface)
+			    Not all devices set this field */
+			wchar_t *interface_name;
+			/** Number of Endpoints */
+			unsigned short endpoints;
 
 			/** Pointer to the next device */
 			struct hid_device_info *next;
@@ -91,7 +102,7 @@ extern "C" {
 			needed.  This function should be called at the beginning of
 			execution however, if there is a chance of HIDAPI handles
 			being opened by different threads simultaneously.
-			
+
 			@ingroup API
 
 			@returns
