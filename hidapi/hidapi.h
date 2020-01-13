@@ -65,10 +65,12 @@ extern "C" {
 			/** Product string */
 			wchar_t *product_string;
 			/** Usage Page for this Device/Interface
-			    (Windows/Mac only). */
+			    (Windows/Mac only)
+			    (Linux if unbound)*/
 			unsigned short usage_page;
 			/** Usage for this Device/Interface
-			    (Windows/Mac only).*/
+			    (Windows/Mac only)
+			    (Linux if unbound)*/
 			unsigned short usage;
 			/** The USB interface which this logical device
 			    represents.
