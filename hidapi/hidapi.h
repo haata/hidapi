@@ -49,6 +49,8 @@ extern "C" {
 		struct hid_device_info {
 			/** Platform-specific device path */
 			char *path;
+			/** Physical Port/Address */
+			wchar_t *address;
 			/** Device Vendor ID */
 			unsigned short vendor_id;
 			/** Device Product ID */

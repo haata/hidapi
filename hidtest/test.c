@@ -50,8 +50,9 @@ int main(int argc, char* argv[])
 	cur_dev = devs;
 	while (cur_dev) {
 		printf("Device Found\n");
-		printf("  Type:               %04hx %04hx\n", cur_dev->vendor_id, cur_dev->product_id);
+		printf("  VID:PID             %04hx:%04hx\n", cur_dev->vendor_id, cur_dev->product_id);
 		printf("  Path:               %s\n", cur_dev->path);
+		printf("  Address:            %ls\n", cur_dev->address);
 		printf("  Serial:             %ls\n", cur_dev->serial_number);
 		printf("  Manufacturer:       %ls\n", cur_dev->manufacturer_string);
 		printf("  Product:            %ls\n", cur_dev->product_string);

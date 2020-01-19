@@ -580,6 +580,9 @@ struct hid_device_info  HID_API_EXPORT *hid_enumerate(unsigned short vendor_id, 
 						str = udev_device_get_sysattr_value(intf_dev, "bInterfaceNumber");
 						cur_dev->interface_number = (str)? strtol(str, NULL, 16): -1;
 
+						/* Interface address */
+						cur_dev->address = utf8_to_wchar_t(udev_device_get_sysname(intf_dev));
+
 						/* Interface class */
 						str = udev_device_get_sysattr_value(intf_dev, "bInterfaceClass");
 						cur_dev->interface_class = (str)? strtol(str, NULL, 16): -1;
@@ -598,6 +601,34 @@ struct hid_device_info  HID_API_EXPORT *hid_enumerate(unsigned short vendor_id, 
 
 						/* Interface name */
 						cur_dev->interface_name = copy_udev_string(intf_dev, "interface");
+
+						/* Look for hiddev device, used to acquire usage and usage page */
+						struct udev_enumerate *hiddev_enumerate;
+						struct udev_list_entry *hiddev_devices, *hiddev_list_entry;
+						hiddev_enumerate = udev_enumerate_new(udev);
+						udev_enumerate_add_match_parent(hiddev_enumerate, intf_dev);
+						udev_enumerate_add_match_subsystem(hiddev_enumerate, "usbmisc");
+						udev_enumerate_scan_devices(hiddev_enumerate);
+						hiddev_devices = udev_enumerate_get_list_entry(hiddev_enumerate);
+						/* Check each item (there should only be one) */
+						udev_list_entry_foreach(hiddev_list_entry, hiddev_devices) {
+							const char *hiddev_sysfs_path;
+							const char *hiddev_node_path;
+							struct udev_device *hiddev_dev_path; /* The device's hiddev udev node. */
+
+							hiddev_sysfs_path = udev_list_entry_get_name(hiddev_list_entry);
+							hiddev_dev_path = udev_device_new_from_syspath(udev, hiddev_sysfs_path);
+							hiddev_node_path = udev_device_get_devnode(hiddev_dev_path);
+							printf("This-> %s\n", cur_dev->path);
+							printf("This-> %ls\n", cur_dev->interface_name);
+							printf("This-> %s\n", hiddev_sysfs_path);
+							printf("This-> %s\n", hiddev_node_path);
+						}
+						udev_enumerate_unref(hiddev_enumerate);
+					}
+					else {
+						/* Fallback address */
+						cur_dev->address = utf8_to_wchar_t(udev_device_get_sysname(usb_dev));
 					}
 
 					break;
