@@ -624,9 +624,12 @@ void  HID_API_EXPORT hid_free_enumeration(struct hid_device_info *devs)
 	while (d) {
 		struct hid_device_info *next = d->next;
 		free(d->path);
+		free(d->address);
+		free(d->alternate_path);
 		free(d->serial_number);
 		free(d->manufacturer_string);
 		free(d->product_string);
+		free(d->interface_name);
 		free(d);
 		d = next;
 	}

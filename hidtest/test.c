@@ -52,7 +52,8 @@ int main(int argc, char* argv[])
 		printf("Device Found\n");
 		printf("  VID:PID             %04hx:%04hx\n", cur_dev->vendor_id, cur_dev->product_id);
 		printf("  Path:               %s\n", cur_dev->path);
-		printf("  Address:            %ls\n", cur_dev->address);
+		printf("  Alternate Path:     %s\n", cur_dev->alternate_path);
+		printf("  Address:            %s\n", cur_dev->address);
 		printf("  Serial:             %ls\n", cur_dev->serial_number);
 		printf("  Manufacturer:       %ls\n", cur_dev->manufacturer_string);
 		printf("  Product:            %ls\n", cur_dev->product_string);

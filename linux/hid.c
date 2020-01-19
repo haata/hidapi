@@ -265,12 +265,10 @@ static int get_usage(__u8 *report_descriptor, size_t size, unsigned short *usage
 	int size_code;
 	int data_len, key_size;
 	int usage_found = 0, usage_page_found = 0;
-	printf("GETTT");
 
 	while (i < size) {
 		int key = report_descriptor[i];
 		int key_cmd = key & 0xfc;
-		printf("key: %02hhx\n", key);
 
 		if ((key & 0xf0) == 0xf0) {
 			/*
@@ -330,6 +328,9 @@ static int get_usage(__u8 *report_descriptor, size_t size, unsigned short *usage
 	return -1; /* failure */
 }
 
+/*
+ * Retrieves the hidraw report descriptor
+ */
 static int get_report_descriptor(int device_handle, struct hidraw_report_descriptor *rpt_desc)
 {
 	int res, desc_size = 0;
@@ -345,13 +346,51 @@ static int get_report_descriptor(int device_handle, struct hidraw_report_descrip
 
 	/* Get Report Descriptor */
 	rpt_desc->size = desc_size;
-	res = ioctl(device_handle, HIDIOCGRDESC, &rpt_desc);
+	res = ioctl(device_handle, HIDIOCGRDESC, rpt_desc);
 	if (res < 0) {
 		register_global_error_format("ioctl (GRDESC): %s", strerror(errno));
 		return res;
 	}
 
 	return res;
+}
+
+/*
+ * Find udev device child node path
+ * Useful in finding input or hiddev related alternate paths to hidraw
+ * e.g. /dev/usb/hiddev1
+ *      /dev/input/event2
+ *      /dev/input/mouse0
+ * get_udev_child_node_path(udev, intf_dev, "usbmisc", buf)
+ * get_udev_child_node_path(udev, hid_dev, "input", buf)
+ */
+static int get_udev_child_node_path(struct udev *udev, struct udev_device *device, const char* subsystem, char** path)
+{
+	struct udev_enumerate *enumerate;
+	struct udev_list_entry *devices, *list_entry;
+	const char *sysfs_path;
+	const char *node_path;
+	struct udev_device *dev_path;
+	int ret = -1;
+
+	/* Build enumeration match */
+	enumerate = udev_enumerate_new(udev);
+	udev_enumerate_add_match_parent(enumerate, device);
+	udev_enumerate_add_match_subsystem(enumerate, subsystem);
+	udev_enumerate_scan_devices(enumerate);
+	devices = udev_enumerate_get_list_entry(enumerate);
+
+	/* Check for match (there should be only one node_path, though there may be multiple elements) */
+	udev_list_entry_foreach(list_entry, devices) {
+		ret = 0;
+		sysfs_path = udev_list_entry_get_name(list_entry);
+		dev_path = udev_device_new_from_syspath(udev, sysfs_path);
+		node_path = udev_device_get_devnode(dev_path);
+		*path = node_path? strdup(node_path): NULL;
+	}
+	udev_enumerate_unref(enumerate);
+
+	return ret;
 }
 
 /*
@@ -630,6 +669,9 @@ struct hid_device_info  HID_API_EXPORT *hid_enumerate(unsigned short vendor_id, 
 			cur_dev->next = NULL;
 			cur_dev->path = dev_path? strdup(dev_path): NULL;
 
+			/* Set alternate path, will fail and be set later if hiddev */
+			get_udev_child_node_path(udev, hid_dev, "input", &cur_dev->alternate_path);
+
 			/* VID/PID */
 			cur_dev->vendor_id = dev_vid;
 			cur_dev->product_id = dev_pid;
@@ -726,7 +768,7 @@ struct hid_device_info  HID_API_EXPORT *hid_enumerate(unsigned short vendor_id, 
 						cur_dev->interface_number = (str)? strtol(str, NULL, 16): -1;
 
 						/* Interface address */
-						cur_dev->address = utf8_to_wchar_t(udev_device_get_sysname(intf_dev));
+						cur_dev->address = strdup(udev_device_get_sysname(intf_dev));
 
 						/* Interface class */
 						str = udev_device_get_sysattr_value(intf_dev, "bInterfaceClass");
@@ -747,33 +789,13 @@ struct hid_device_info  HID_API_EXPORT *hid_enumerate(unsigned short vendor_id, 
 						/* Interface name */
 						cur_dev->interface_name = copy_udev_string(intf_dev, "interface");
 
-						/* Look for hiddev device, used to acquire usage and usage page */
-						struct udev_enumerate *hiddev_enumerate;
-						struct udev_list_entry *hiddev_devices, *hiddev_list_entry;
-						hiddev_enumerate = udev_enumerate_new(udev);
-						udev_enumerate_add_match_parent(hiddev_enumerate, intf_dev);
-						udev_enumerate_add_match_subsystem(hiddev_enumerate, "usbmisc");
-						udev_enumerate_scan_devices(hiddev_enumerate);
-						hiddev_devices = udev_enumerate_get_list_entry(hiddev_enumerate);
-						/* Check each item (there should only be one) */
-						udev_list_entry_foreach(hiddev_list_entry, hiddev_devices) {
-							const char *hiddev_sysfs_path;
-							const char *hiddev_node_path;
-							struct udev_device *hiddev_dev_path; /* The device's hiddev udev node. */
-
-							hiddev_sysfs_path = udev_list_entry_get_name(hiddev_list_entry);
-							hiddev_dev_path = udev_device_new_from_syspath(udev, hiddev_sysfs_path);
-							hiddev_node_path = udev_device_get_devnode(hiddev_dev_path);
-							printf("This-> %s\n", cur_dev->path);
-							printf("This-> %ls\n", cur_dev->interface_name);
-							printf("This-> %s\n", hiddev_sysfs_path);
-							printf("This-> %s\n", hiddev_node_path);
-						}
-						udev_enumerate_unref(hiddev_enumerate);
+						/* Check for hiddev, if not already set */
+						if (!cur_dev->alternate_path)
+							get_udev_child_node_path(udev, intf_dev, "usbmisc", &cur_dev->alternate_path);
 					}
 					else {
 						/* Fallback address */
-						cur_dev->address = utf8_to_wchar_t(udev_device_get_sysname(usb_dev));
+						cur_dev->address = strdup(udev_device_get_sysname(usb_dev));
 					}
 
 					break;
@@ -813,9 +835,12 @@ void  HID_API_EXPORT hid_free_enumeration(struct hid_device_info *devs)
 	while (d) {
 		struct hid_device_info *next = d->next;
 		free(d->path);
+		free(d->address);
+		free(d->alternate_path);
 		free(d->serial_number);
 		free(d->manufacturer_string);
 		free(d->product_string);
+		free(d->interface_name);
 		free(d);
 		d = next;
 	}

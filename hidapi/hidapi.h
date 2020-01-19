@@ -49,8 +49,11 @@ extern "C" {
 		struct hid_device_info {
 			/** Platform-specific device path */
 			char *path;
+			/** Platform-specifc alternate path
+			    (hidraw -> hiddev only) */
+			char *alternate_path;
 			/** Physical Port/Address */
-			wchar_t *address;
+			char *address;
 			/** Device Vendor ID */
 			unsigned short vendor_id;
 			/** Device Product ID */
@@ -65,12 +68,10 @@ extern "C" {
 			/** Product string */
 			wchar_t *product_string;
 			/** Usage Page for this Device/Interface
-			    (Windows/Mac only)
-			    (Linux if unbound)*/
+			    (Windows/Mac/hidraw only) */
 			unsigned short usage_page;
 			/** Usage for this Device/Interface
-			    (Windows/Mac only)
-			    (Linux if unbound)*/
+			    (Windows/Mac/hidraw only) */
 			unsigned short usage;
 			/** The USB interface which this logical device
 			    represents.
@@ -88,7 +89,13 @@ extern "C" {
 			/** Interface Protocol */
 			unsigned short interface_protocol;
 			/** Interface Name (iInterface)
-			    Not all devices set this field */
+			    Not all devices set this field
+			    (libusb/hidraw only)
+
+			    On Windows, product_string is set to iInterface if iInterface is non-zero
+			    Likewise for iFunction (TODO -> TEST)
+			    See: https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/hidsdi/nf-hidsdi-hidd_getindexedstring
+			    */
 			wchar_t *interface_name;
 			/** Number of Endpoints */
 			unsigned short endpoints;

@@ -494,6 +494,14 @@ struct hid_device_info HID_API_EXPORT * HID_API_CALL hid_enumerate(unsigned shor
 			}
 
 			/* These fields aren't available in the Windows HID API and are USB specific */
+			/* Alternate Path */
+			cur_dev->alternate_path = strdup("");
+
+			/* Physical Port/Address */
+			/* TODO Is it possible to cross-reference with another API? */
+			/* TODO https://stackoverflow.com/a/37604994/9357160 */
+			cur_dev->address = strdup("");
+
 			/* Interface Class */
 			cur_dev->interface_class = -1;
 
@@ -534,9 +542,12 @@ void  HID_API_EXPORT HID_API_CALL hid_free_enumeration(struct hid_device_info *d
 	while (d) {
 		struct hid_device_info *next = d->next;
 		free(d->path);
+		free(d->address);
+		free(d->alternate_path);
 		free(d->serial_number);
 		free(d->manufacturer_string);
 		free(d->product_string);
+		free(d->interface_name);
 		free(d);
 		d = next;
 	}

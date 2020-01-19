@@ -519,6 +519,56 @@ int HID_API_EXPORT hid_exit(void)
 	return 0;
 }
 
+/*
+ * Construct a unique USB port address
+ * This address should stay the same if a device is unplugged and plugged back into the same port
+ * For details see (follows Linux sysfs format): https://stackoverflow.com/a/33142810/9357160
+ * Can be used to cross-reference hidraw devices on Linux
+ *
+ * Various forms
+ * X-Y:A.B
+ * X-Y.Z:A.B
+ * X-Y.Z1.Z2.Z3:A.B
+ *
+ * X - Motherboard bus number
+ * Y - Motherboard port number
+ * Z - Hub port number (Z1, Z2... refer to chained hub ports)
+ * A - Configuration
+ * B - Interface
+ */
+static char *make_port_address(libusb_device *dev, libusb_device_handle *handle, int interface_number)
+{
+	/* Get bus number */
+	uint8_t bus_number = libusb_get_bus_number(dev);
+
+	/* Get port chain */
+	uint8_t port_numbers[7]; // Depth limit per USB 3.0 spec
+	uint8_t num_ports = libusb_get_port_numbers(dev, (uint8_t*)&port_numbers, sizeof(port_numbers));
+	if (num_ports == LIBUSB_ERROR_OVERFLOW) {
+		LOG("Port number depth exceeded. %d is too small. This is a bug!", sizeof(port_numbers));
+		return "";
+	}
+
+	/* Get Configuration */
+	int config_number = 0;
+	int res = libusb_get_configuration(handle, &config_number);
+	if (res) {
+		LOG("Could not retrieve configuration number, err: %s", res);
+		return "";
+	}
+
+	/* Construct address */
+	char str[64];
+	uint8_t pos = snprintf(str, sizeof(str), "%u-%u", bus_number, port_numbers[0]);
+	for (uint8_t c = 1; c < num_ports; c++) {
+		pos += snprintf(&str[pos], sizeof(str)-pos, ".%u", port_numbers[c]);
+	}
+	pos += snprintf(&str[pos], sizeof(str)-pos, ":%d.%d", config_number, interface_number);
+	str[pos] = '\0';
+
+	return strdup(str);
+}
+
 struct hid_device_info  HID_API_EXPORT *hid_enumerate(unsigned short vendor_id, unsigned short product_id)
 {
 	libusb_device **devs;
@@ -659,6 +709,8 @@ struct hid_device_info  HID_API_EXPORT *hid_enumerate(unsigned short vendor_id, 
 								/* Interface Name */
 								cur_dev->interface_name = get_usb_string(handle, intf_desc->iInterface);
 
+								/* Port Address */
+								cur_dev->address = make_port_address(dev, handle, interface_num);
 								libusb_close(handle);
 							}
 							/* VID/PID */
@@ -701,9 +753,12 @@ void  HID_API_EXPORT hid_free_enumeration(struct hid_device_info *devs)
 	while (d) {
 		struct hid_device_info *next = d->next;
 		free(d->path);
+		free(d->address);
+		free(d->alternate_path);
 		free(d->serial_number);
 		free(d->manufacturer_string);
 		free(d->product_string);
+		free(d->interface_name);
 		free(d);
 		d = next;
 	}
