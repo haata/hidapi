@@ -1,0 +1,25 @@
+name: macOS Build
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: macOS-latest
+    strategy:
+      max-parallel: 4
+      fail-fast: false
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: Install dependencies
+      run: |
+        brew update
+        brew install automake libtool
+    - name: Build
+      run: |
+        ./bootstrap
+        ./configure
+        make -j
+    - name: Test
+      run: |
+        hidtest/hidtest

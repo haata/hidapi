@@ -61,6 +61,8 @@ int main(int argc, char* argv[])
 	}
 	hid_free_enumeration(devs);
 
+	// Requires specific hardware to run this section
+#if 0
 	// Set up the command buffer.
 	memset(buf,0x00,sizeof(buf));
 	buf[0] = 0x01;
@@ -189,6 +191,7 @@ int main(int argc, char* argv[])
 
 #ifdef WIN32
 	system("pause");
+#endif
 #endif
 
 	return 0;

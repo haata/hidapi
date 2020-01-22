@@ -1,0 +1,26 @@
+name: Linux Build
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 4
+      fail-fast: false
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libudev-dev libusb-1.0-0-dev
+    - name: Build
+      run: |
+        ./bootstrap
+        ./configure
+        make -j
+    - name: Test
+      run: |
+        hidtest/hidtest-hidraw
+        hidtest/hidtest-libusb
