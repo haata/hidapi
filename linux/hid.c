@@ -36,11 +36,13 @@
 #include <sys/utsname.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <libgen.h>
 
 /* Linux */
 #include <linux/hidraw.h>
 #include <linux/version.h>
 #include <linux/input.h>
+#include <linux/hiddev.h>
 #include <libudev.h>
 
 #include "hidapi.h"
@@ -66,24 +68,14 @@ struct hid_device_ {
 	int device_handle;
 	int blocking;
 	int uses_numbered_reports;
+	char *path;
+	char *hiddev_path;
 	wchar_t *last_error_str;
 };
 
 /* Global error message that is not specific to a device, e.g. for
    hid_open(). It is thread-local like errno. */
 __thread wchar_t *last_global_error_str = NULL;
-
-static hid_device *new_hid_device(void)
-{
-	hid_device *dev = (hid_device*) calloc(1, sizeof(hid_device));
-	dev->device_handle = -1;
-	dev->blocking = 1;
-	dev->uses_numbered_reports = 0;
-	dev->last_error_str = NULL;
-
-	return dev;
-}
-
 
 /* The caller must free the returned string with free(). */
 static wchar_t *utf8_to_wchar_t(const char *utf8)
@@ -103,7 +95,6 @@ static wchar_t *utf8_to_wchar_t(const char *utf8)
 	return ret;
 }
 
-
 /* Set the last global error to be reported by hid_error(NULL).
  * The given error message will be copied (and decoded according to the
  * currently locale, so do not pass in string constants).
@@ -116,7 +107,6 @@ static void register_global_error(const char *msg)
 
 	last_global_error_str = utf8_to_wchar_t(msg);
 }
-
 
 /* Set the last error for a device to be reported by hid_error(device).
  * The given error message will be copied (and decoded according to the
@@ -143,6 +133,109 @@ static void register_device_error_format(hid_device *dev, const char *format, ..
 	va_end(args);
 
 	register_device_error(dev, msg);
+}
+
+/*
+ * Find udev device child node path
+ * Useful in finding input or hiddev related alternate paths to hidraw
+ * e.g. /dev/usb/hiddev1
+ *      /dev/input/event2
+ *      /dev/input/mouse0
+ * get_udev_child_node_path(udev, intf_dev, "usbmisc", buf)
+ * get_udev_child_node_path(udev, hid_dev, "input", buf)
+ * Returns 0 on success, -1 otherwise
+ */
+static int get_udev_child_node_path(struct udev *udev, struct udev_device *device, const char* subsystem, char** path)
+{
+	struct udev_enumerate *enumerate;
+	struct udev_list_entry *devices, *list_entry;
+	const char *sysfs_path;
+	const char *node_path;
+	struct udev_device *dev_path;
+	int ret = -1;
+
+	/* Build enumeration match */
+	enumerate = udev_enumerate_new(udev);
+	udev_enumerate_add_match_parent(enumerate, device);
+	udev_enumerate_add_match_subsystem(enumerate, subsystem);
+	udev_enumerate_scan_devices(enumerate);
+	devices = udev_enumerate_get_list_entry(enumerate);
+
+	/* Check for match (there should be only one node_path, though there may be multiple elements) */
+	udev_list_entry_foreach(list_entry, devices) {
+		sysfs_path = udev_list_entry_get_name(list_entry);
+		dev_path = udev_device_new_from_syspath(udev, sysfs_path);
+		node_path = udev_device_get_devnode(dev_path);
+		if (node_path) {
+			/* Only return success if a path is found */
+			ret = 0;
+			*path = strdup(node_path);
+			break;
+		}
+	}
+	udev_enumerate_unref(enumerate);
+
+	return ret;
+}
+
+static hid_device *new_hid_device(const char* path)
+{
+	struct udev *udev;
+	struct udev_enumerate *enumerate;
+	struct udev_list_entry *devices, *dev_list_entry;
+
+	hid_device *dev = (hid_device*) calloc(1, sizeof(hid_device));
+	dev->device_handle = -1;
+	dev->blocking = 1;
+	dev->uses_numbered_reports = 0;
+	dev->last_error_str = NULL;
+	dev->path = strdup(path);
+	dev->hiddev_path = NULL;
+
+	/* Lookup hiddev path using hidraw path (may not exist depending on the descriptor)
+	   This is done on a best effort basis, and is expected to not succeed if the hiddev
+	   module is not loaded for this HID descriptor */
+
+	/* Create the udev object */
+	udev = udev_new();
+	if (!udev) {
+		register_global_error("Couldn't create udev context to find hiddev reference");
+		return dev;
+	}
+
+	/* Locate udev hidraw device being opened */
+	enumerate = udev_enumerate_new(udev);
+	udev_enumerate_add_match_sysname(enumerate, basename(dev->path));
+	udev_enumerate_scan_devices(enumerate);
+	devices = udev_enumerate_get_list_entry(enumerate);
+	udev_list_entry_foreach(dev_list_entry, devices) {
+		const char *sysfs_path;
+		struct udev_device *raw_dev; /* The device's hidraw udev node. */
+		struct udev_device *hid_dev; /* The device's HID udev node. */
+		struct udev_device *intf_dev; /* The device's interface (in the USB sense). */
+
+		/* Locate the USB interface for the device */
+		sysfs_path = udev_list_entry_get_name(dev_list_entry);
+		raw_dev = udev_device_new_from_syspath(udev, sysfs_path);
+		intf_dev = udev_device_get_parent_with_subsystem_devtype(
+				raw_dev,
+				"usb",
+				"usb_interface");
+
+		if (!intf_dev) {
+			/* Unable to find parent interface */
+			continue;
+		}
+
+		/* Attempt to retrieve hiddev path, not available with many HID descriptors */
+		int res;
+		res = get_udev_child_node_path(udev, intf_dev, "usbmisc", &dev->hiddev_path);
+		if (res < 0) {
+			continue;
+		}
+	}
+
+	return dev;
 }
 
 /* Get an attribute value from a udev_device and return it as a whar_t
@@ -646,7 +739,7 @@ hid_device * HID_API_EXPORT hid_open_path(const char *path)
 
 	hid_init();
 
-	dev = new_hid_device();
+	dev = new_hid_device(path);
 
 	/* OPEN HERE */
 	dev->device_handle = open(path, O_RDWR);
@@ -790,10 +883,44 @@ int HID_API_EXPORT hid_get_feature_report(hid_device *dev, unsigned char *data, 
 	return res;
 }
 
-// Not supported by Linux HidRaw yet
+/*
+ * Not supported by Linux HidRaw yet
+ * Fallback to hiddev when available through udev
+ */
 int HID_API_EXPORT HID_API_CALL hid_get_input_report(hid_device *dev, unsigned char *data, size_t length)
 {
-	return -1;
+	int fd;
+	int res;
+	int bytes_read = -1;
+
+	/* Check if hiddev_path is available, otherwise fail */
+	if (!dev->hiddev_path)
+		return -1;
+
+	/* Open hiddev device */
+	fd = open(dev->hiddev_path, O_RDONLY);
+	if (fd < 0)
+	{
+		register_device_error_format(dev, "Failed to open %s", dev->hiddev_path);
+		return -1;
+	}
+
+	/* Send ioctl to report input report */
+	struct hiddev_report_info hiddev_req;
+	hiddev_req.report_type = HID_REPORT_TYPE_INPUT;
+	hiddev_req.report_id = data[0]; /* First byte is the Report ID */
+	hiddev_req.num_fields = 0; /* This field isn't used */
+	res = ioctl(fd, HIDIOCGREPORT, &hiddev_req);
+	if (res < 0) {
+		register_device_error_format(dev, "ioctl (GREPORT): %s", strerror(errno));
+		goto end;
+	}
+
+
+end:
+	close(fd);
+
+	return bytes_read;
 }
 
 void HID_API_EXPORT hid_close(hid_device *dev)
@@ -802,6 +929,9 @@ void HID_API_EXPORT hid_close(hid_device *dev)
 		return;
 
 	int ret = close(dev->device_handle);
+
+	free(dev->path);
+	free(dev->hiddev_path);
 
 	register_global_error((ret == -1)? strerror(errno): NULL);
 

@@ -46,6 +46,12 @@ int main(int argc, char* argv[])
 	if (hid_init())
 		return -1;
 
+	hid_device *mydev;
+	mydev = hid_open_path("/dev/hidraw14");
+	unsigned char mybuf[256];
+	hid_get_input_report(mydev, mybuf, sizeof(mybuf));
+	return 0;
+
 	devs = hid_enumerate(0x0, 0x0);
 	cur_dev = devs;	
 	while (cur_dev) {
