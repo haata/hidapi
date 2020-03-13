@@ -46,6 +46,10 @@
 #include "hidapi.h"
 
 
+/* Convenience macros */
+#define UNUSED(x) UNUSED_ ## x __attribute__((__unused__))
+
+
 /* USB HID device property names */
 const char *device_string_names[] = {
 	"manufacturer",
@@ -1034,7 +1038,7 @@ int HID_API_EXPORT hid_get_feature_report(hid_device *dev, unsigned char *data, 
 }
 
 // Not supported by Linux HidRaw yet
-int HID_API_EXPORT HID_API_CALL hid_get_input_report(hid_device *dev, unsigned char *data, size_t length)
+int HID_API_EXPORT HID_API_CALL hid_get_input_report(hid_device *UNUSED(dev), unsigned char *UNUSED(data), size_t UNUSED(length))
 {
 	return -1;
 }
@@ -1070,7 +1074,7 @@ int HID_API_EXPORT_CALL hid_get_serial_number_string(hid_device *dev, wchar_t *s
 	return get_device_string(dev, DEVICE_STRING_SERIAL, string, maxlen);
 }
 
-int HID_API_EXPORT_CALL hid_get_indexed_string(hid_device *dev, int string_index, wchar_t *string, size_t maxlen)
+int HID_API_EXPORT_CALL hid_get_indexed_string(hid_device *UNUSED(dev), int UNUSED(string_index), wchar_t *UNUSED(string), size_t UNUSED(maxlen))
 {
 	return -1;
 }
